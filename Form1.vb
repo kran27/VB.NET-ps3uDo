@@ -2,14 +2,39 @@
 Imports ImageTools.Tools
 
 Public Class Form1
+    Private Const FrameTimeCap = 6 ' how long before a new frame is drawn (in ms), 1ms is practically uncapped.
 
-    Private Const SW = 1920
-    Private Const SH = 1080
-    Private Const SW2 = SW / 2
-    Private Const SH2 = SH / 2
-    Private Const pixelScale = 1
-    Private Const FSW = SW * pixelScale
-    Private Const FSH = SH * pixelScale
+    Private Shared SW As Integer = My.Computer.Screen.Bounds.Width
+    Private Shared SH As Integer = My.Computer.Screen.Bounds.Height
+    Private Property SW2 As Integer
+        Get
+            Return SW / 2
+        End Get
+        Set(value As Integer)
+        End Set
+    End Property
+    Private Property SH2 As Integer
+        Get
+            Return SH / 2
+        End Get
+        Set(value As Integer)
+        End Set
+    End Property
+    Private pixelScale As Single = 1
+    Private Property FSW As Integer
+        Get
+            Return SW * pixelScale
+        End Get
+        Set(value As Integer)
+        End Set
+    End Property
+    Private Property FSH As Integer
+        Get
+            Return SH * pixelScale
+        End Get
+        Set(value As Integer)
+        End Set
+    End Property
 
     Private Const numSect = 4
     Private Const numWall = 16
@@ -24,6 +49,8 @@ Public Class Form1
     Private lookDown As Boolean = False
     Private lookLeft As Boolean = False
     Private lookRight As Boolean = False
+    Private altHeld As Boolean = False
+    Private enterHeld As Boolean = False
 
     Private loadSectors = {
         0, 4, 0, 40, 2, 3,
@@ -308,7 +335,9 @@ Public Class Form1
             Next lop
         Next s
         DrawToScreen(Frame)
-        Label1.Text = "FPS: " & CInt(1000 / (Date.Now.Millisecond - startTime))
+        Dim elapsedTime = Date.Now.Millisecond - startTime
+        Label1.Text = elapsedTime & "ms"
+        Label2.Text = CInt(1000 / If(Timer1.Interval < elapsedTime, elapsedTime, Timer1.Interval)) & "fps"
     End Sub
 
     Private Function dist(x1 As Integer, y1 As Integer, x2 As Integer, y2 As Integer) As Single
@@ -329,6 +358,11 @@ Public Class Form1
     End Sub
 
     Private Sub Form1_Load(sender As Object, e As EventArgs) Handles MyBase.Load
+        Label1.BackColor = cols(8)
+        Label2.BackColor = cols(8)
+        Label1.ForeColor = Color.White
+        Label2.ForeColor = Color.White
+        Timer1.Interval = FrameTimeCap
         PictureBox1.Location = New Point(0, 0)
         PictureBox1.Size = New Size(SW * pixelScale, SH * pixelScale)
         PictureBox1.SendToBack()
@@ -359,9 +393,42 @@ Public Class Form1
             moveUp = True
         ElseIf e.KeyCode = Keys.ControlKey Then
             moveDown = True
+        ElseIf e.KeyCode = 18 Then ' Keys.Alt does not work, KeyCode 18 does
+            altHeld = True
+        ElseIf e.KeyCode = Keys.Return Then
+            enterHeld = True
+        End If
+        If altHeld AndAlso enterHeld Then
+            If FormBorderStyle = FormBorderStyle.None Then
+                FormBorderStyle = FormBorderStyle.FixedSingle
+                SW /= 2 : SH /= 2
+                Frame = New DirectBitmap(SW, SH)
+                Size = New Size(SW * pixelScale, SH * pixelScale)
+            Else
+                FormBorderStyle = FormBorderStyle.None
+                Location = New Point(0, 0)
+                SW = My.Computer.Screen.Bounds.Width
+                SH = My.Computer.Screen.Bounds.Height
+                Frame = New DirectBitmap(SW, SH)
+                Size = New Size(SW * pixelScale, SH * pixelScale)
+            End If
+            altHeld = False
+            enterHeld = False
         End If
         MovePlayer()
         MyBase.OnKeyDown(e)
+    End Sub
+    Protected Overrides Sub OnKeyPress(e As KeyPressEventArgs)
+        If e.KeyChar = "-" Then
+            SW /= 2 : SH /= 2 : pixelScale *= 2
+            Frame = New DirectBitmap(SW, SH)
+        ElseIf e.KeyChar = "+" Then
+            If Not SW = My.Computer.Screen.Bounds.Width Then
+                SW *= 2 : SH *= 2 : pixelScale /= 2
+                Frame = New DirectBitmap(SW, SH)
+            End If
+        End If
+        MyBase.OnKeyPress(e)
     End Sub
     Protected Overrides Sub OnKeyUp(e As KeyEventArgs)
         If e.KeyCode = Keys.W Then
@@ -384,6 +451,10 @@ Public Class Form1
             moveUp = False
         ElseIf e.KeyCode = Keys.ControlKey Then
             moveDown = False
+        ElseIf e.KeyCode = Keys.Alt Then
+            altHeld = False
+        ElseIf e.KeyCode = Keys.Enter Then
+            enterHeld = False
         End If
         MyBase.OnKeyUp(e)
     End Sub
