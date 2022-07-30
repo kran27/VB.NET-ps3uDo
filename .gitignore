@@ -2,3 +2,5 @@
 bin/
 obj/
 .vs/
+My Project/PublishProfiles/
+DoomEngine.vbproj.user
