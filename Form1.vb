@@ -2,7 +2,8 @@
 Imports ImageTools.Tools
 
 Public Class Form1
-    Private Const FrameTimeCap = 6 ' how long before a new frame is drawn (in ms), 1ms is practically uncapped.
+    Private Const FrameTimeCap = 16 ' how long before a new frame is drawn (in ms), 1ms is practically uncapped.
+    Private Translucent As Boolean = False ' whether or not to draw everything as translucent
 
     Private Shared SW As Integer = My.Computer.Screen.Bounds.Width
     Private Shared SH As Integer = My.Computer.Screen.Bounds.Height
@@ -20,7 +21,7 @@ Public Class Form1
         Set(value As Integer)
         End Set
     End Property
-    Private pixelScale As Single = 1
+    Private pixelScale As Integer = 1
     Private Property FSW As Integer
         Get
             Return SW * pixelScale
@@ -96,6 +97,7 @@ Public Class Form1
         Public c1 As Integer
         Public c2 As Integer
         Public Surf(SW) As Integer
+        Public Surf2(SW) As Integer
         Public surface As Integer
     End Class
     Private Sects() As Sectors = NewSect()
@@ -159,6 +161,17 @@ Public Class Form1
     Color.FromArgb(0, 160, 160),
     Color.FromArgb(160, 100, 0),
     Color.FromArgb(110, 50, 0),
+    Color.FromArgb(0, 60, 130)
+    }
+    Private colsT() As Color = {
+    Color.FromArgb(127, 255, 255, 0),
+    Color.FromArgb(127, 160, 160, 0),
+    Color.FromArgb(127, 0, 255, 0),
+    Color.FromArgb(127, 0, 160, 0),
+    Color.FromArgb(127, 0, 255, 255),
+    Color.FromArgb(127, 0, 160, 160),
+    Color.FromArgb(127, 160, 100, 0),
+    Color.FromArgb(127, 110, 50, 0),
     Color.FromArgb(0, 60, 130)
     }
 
@@ -240,6 +253,36 @@ Public Class Form1
             Next
         Next
 
+    End Sub
+    Private Sub DrawWallT(x1 As Integer, x2 As Integer, b1 As Integer, b2 As Integer, t1 As Integer, t2 As Integer, c As Integer, s As Integer)
+        Dim x As Integer : Dim y As Integer
+
+        Dim dyb = b2 - b1
+        Dim dyt = t2 - t1
+        Dim dx = x2 - x1 : If dx = 0 Then dx = 1
+        Dim xs = x1
+
+        x1 = Math.Clamp(x1, 0, SW - 1)
+        x2 = Math.Clamp(x2, 0, SW - 1)
+
+        Dim gr = Graphics.FromImage(Frame.Bitmap)
+
+        For x = x1 To x2
+            Dim y1 As Integer = dyb * (x - xs + 0.5) / dx + b1
+            Dim y2 As Integer = dyt * (x - xs + 0.5) / dx + t1
+
+            y1 = Math.Clamp(y1, 0, SH)
+            y2 = Math.Clamp(y2, 0, SH)
+
+            If Sects(s).surface = 1 Then
+                Sects(s).Surf(x) = y1
+                Sects(s).Surf2(x) = y2
+            ElseIf Sects(s).surface = -1 Then
+                gr.DrawLine(New Pen(colsT(Sects(s).c1)), x, y1, x, Sects(s).Surf(x))
+                gr.DrawLine(New Pen(colsT(Sects(s).c2)), x, Sects(s).Surf2(x), x, y2)
+            End If
+            gr.DrawLine(New Pen(colsT(c)), x, y1, x, y2)
+        Next
     End Sub
     Public Function MakePolgon(p1 As Integer, p2 As Integer, p3 As Integer, p4 As Integer, p5 As Integer, p6 As Integer, p7 As Integer, p8 As Integer) As PointF()
         Dim points() As PointF = {
@@ -323,12 +366,87 @@ Public Class Form1
                     End If
 
 
-                    wx(0) = wx(0) * 270 / wy(0) + SW2 : wy(0) = wz(0) * 270 / wy(0) + SH2
-                    wx(1) = wx(1) * 270 / wy(1) + SW2 : wy(1) = wz(1) * 270 / wy(1) + SH2
-                    wx(2) = wx(2) * 270 / wy(2) + SW2 : wy(2) = wz(2) * 270 / wy(2) + SH2
-                    wx(3) = wx(3) * 270 / wy(3) + SW2 : wy(3) = wz(3) * 270 / wy(3) + SH2
+                    wx(0) = wx(0) * 400 / wy(0) + SW2 : wy(0) = wz(0) * 400 / wy(0) + SH2
+                    wx(1) = wx(1) * 400 / wy(1) + SW2 : wy(1) = wz(1) * 400 / wy(1) + SH2
+                    wx(2) = wx(2) * 400 / wy(2) + SW2 : wy(2) = wz(2) * 400 / wy(2) + SH2
+                    wx(3) = wx(3) * 400 / wy(3) + SW2 : wy(3) = wz(3) * 400 / wy(3) + SH2
 
                     DrawWall(wx(0), wx(1), wy(0), wy(1), wy(2), wy(3), Walls(w).c, s)
+                Next w
+                Sects(s).d /= (Sects(s).we - Sects(s).ws)
+                Sects(s).surface *= -1
+            Next lop
+        Next s
+        DrawToScreen(Frame)
+        Dim elapsedTime = Date.Now.Millisecond - startTime
+        Label1.Text = elapsedTime & "ms"
+        Label2.Text = CInt(1000 / If(Timer1.Interval < elapsedTime, elapsedTime, Timer1.Interval)) & "fps"
+    End Sub
+
+    Private Sub DrawFrameT()
+        Dim startTime = Date.Now.Millisecond
+        Frame.FillImage(colsT(8))
+        Dim wx(4) As Integer : Dim wy(4) As Integer : Dim wz(4) As Integer : Dim CS = M.cos(P.a) : Dim SN = M.sin(P.a)
+
+        For s = 0 To numSect - 2
+            For w = 0 To numSect - s - 2
+                If Sects(w).d < Sects(w + 1).d Then
+                    Dim st As Sectors = Sects(w)
+                    Sects(w) = Sects(w + 1)
+                    Sects(w + 1) = st
+                End If
+            Next w
+        Next s
+        For s = 0 To numSect - 1
+            Sects(s).d = 0
+            Sects(s).surface = 1
+            For lop = 0 To 1
+
+                For w = Sects(s).ws To Sects(s).we - 1
+
+
+                    Dim x1 = Walls(w).x1 - P.x : Dim y1 = Walls(w).y1 - P.y
+                    Dim x2 = Walls(w).x2 - P.x : Dim y2 = Walls(w).y2 - P.y
+
+                    If lop = 0 Then
+                        Dim swp = x1 : x1 = x2 : x2 = swp : swp = y1 : y1 = y2 : y2 = swp
+                    End If
+
+                    wx(0) = x1 * CS - y1 * SN
+                    wx(1) = x2 * CS - y2 * SN
+                    wx(2) = wx(0)
+                    wx(3) = wx(1)
+
+                    wy(0) = y1 * CS + x1 * SN
+                    wy(1) = y2 * CS + x2 * SN
+                    wy(2) = wy(0)
+                    wy(3) = wy(1)
+                    Sects(s).d += dist(0, 0, (wx(0) + wx(1)) / 2, (wy(0) + wy(1)) / 2)
+
+                    wz(0) = Sects(s).z1 - P.z + (P.l * wy(0) / 32)
+                    wz(1) = Sects(s).z1 - P.z + (P.l * wy(1) / 32)
+                    wz(2) = wz(0) + Sects(s).z2
+                    wz(3) = wz(1) + Sects(s).z2
+
+                    If wy(0) < 1 AndAlso wy(1) < 1 Then Continue For
+
+                    If wy(0) < 1 Then
+                        clipBehindPlayer(wx(0), wy(0), wz(0), wx(1), wy(1), wz(1))
+                        clipBehindPlayer(wx(2), wy(2), wz(2), wx(3), wy(3), wz(3))
+                    End If
+
+                    If wy(1) < 1 Then
+                        clipBehindPlayer(wx(1), wy(1), wz(1), wx(0), wy(0), wz(0))
+                        clipBehindPlayer(wx(3), wy(3), wz(3), wx(2), wy(2), wz(2))
+                    End If
+
+
+                    wx(0) = wx(0) * 400 / wy(0) + SW2 : wy(0) = wz(0) * 400 / wy(0) + SH2
+                    wx(1) = wx(1) * 400 / wy(1) + SW2 : wy(1) = wz(1) * 400 / wy(1) + SH2
+                    wx(2) = wx(2) * 400 / wy(2) + SW2 : wy(2) = wz(2) * 400 / wy(2) + SH2
+                    wx(3) = wx(3) * 400 / wy(3) + SW2 : wy(3) = wz(3) * 400 / wy(3) + SH2
+
+                    DrawWallT(wx(0), wx(1), wy(0), wy(1), wy(2), wy(3), Walls(w).c, s)
                 Next w
                 Sects(s).d /= (Sects(s).we - Sects(s).ws)
                 Sects(s).surface *= -1
@@ -354,7 +472,11 @@ Public Class Form1
 
     Private Sub Pro() Handles Timer1.Tick
         MovePlayer()
-        DrawFrame()
+        If Translucent Then
+            DrawFrameT()
+        Else
+            DrawFrame()
+        End If
     End Sub
 
     Private Sub Form1_Load(sender As Object, e As EventArgs) Handles MyBase.Load
@@ -423,10 +545,12 @@ Public Class Form1
             SW /= 2 : SH /= 2 : pixelScale *= 2
             Frame = New DirectBitmap(SW, SH)
         ElseIf e.KeyChar = "+" Then
-            If Not SW = My.Computer.Screen.Bounds.Width Then
+            If SW < My.Computer.Screen.Bounds.Width Then
                 SW *= 2 : SH *= 2 : pixelScale /= 2
                 Frame = New DirectBitmap(SW, SH)
             End If
+        ElseIf e.KeyChar = "t" Then
+            Translucent = Not Translucent
         End If
         MyBase.OnKeyPress(e)
     End Sub
