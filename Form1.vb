@@ -1,12 +1,14 @@
-﻿Imports System.Drawing.Drawing2D
+﻿Imports System.Threading
 Imports ImageTools.Tools
 
 Public Class Form1
-    Private Const FrameTimeCap = 16 ' how long before a new frame is drawn (in ms), 1ms is practically uncapped.
-    Private Translucent As Boolean = False ' whether or not to draw everything as translucent
+    Private Const FrameTimeCap = 10 ' how long before a new frame is drawn (in ms), 10ms is minimum
+
+    Private elapsedTime As Integer = 0
 
     Private Shared SW As Integer = My.Computer.Screen.Bounds.Width
     Private Shared SH As Integer = My.Computer.Screen.Bounds.Height
+
     Private Property SW2 As Integer
         Get
             Return SW / 2
@@ -14,24 +16,10 @@ Public Class Form1
         Set(value As Integer)
         End Set
     End Property
+
     Private Property SH2 As Integer
         Get
             Return SH / 2
-        End Get
-        Set(value As Integer)
-        End Set
-    End Property
-    Private pixelScale As Integer = 1
-    Private Property FSW As Integer
-        Get
-            Return SW * pixelScale
-        End Get
-        Set(value As Integer)
-        End Set
-    End Property
-    Private Property FSH As Integer
-        Get
-            Return SH * pixelScale
         End Get
         Set(value As Integer)
         End Set
@@ -50,8 +38,6 @@ Public Class Form1
     Private lookDown As Boolean = False
     Private lookLeft As Boolean = False
     Private lookRight As Boolean = False
-    Private altHeld As Boolean = False
-    Private enterHeld As Boolean = False
 
     Private loadSectors = {
         0, 4, 0, 40, 2, 3,
@@ -86,6 +72,7 @@ Public Class Form1
         Public y2 As Integer
         Public c As Integer
     End Class
+
     Private Walls() As Wall = NewWalls()
 
     Public Class Sectors
@@ -100,6 +87,7 @@ Public Class Form1
         Public Surf2(SW) As Integer
         Public surface As Integer
     End Class
+
     Private Sects() As Sectors = NewSect()
 
     Public Function NewSect() As Sectors()
@@ -111,6 +99,7 @@ Public Class Form1
         }
         Return arr
     End Function
+
     Private Function NewWalls() As Wall()
         Dim arr() As Wall = New Wall(numWall - 1) {
             New Wall With {.x1 = loadWalls(0), .y1 = loadWalls(1), .x2 = loadWalls(2), .y2 = loadWalls(3), .c = loadWalls(4)},
@@ -132,17 +121,22 @@ Public Class Form1
         }
         Return arr
     End Function
+
     Private Class CosSin
         Public cos(359) As Single
         Public sin(359) As Single
+
         Public Sub New()
             For i = 0 To 359
                 cos(i) = CSng(Math.Cos(i * Math.PI / 180))
                 sin(i) = CSng(Math.Sin(i * Math.PI / 180))
             Next
         End Sub
+
     End Class
+
     Private M As New CosSin
+
     Public Class player
         Public x As Integer
         Public y As Integer
@@ -150,6 +144,7 @@ Public Class Form1
         Public a As Integer
         Public l As Integer
     End Class
+
     Private P As New player With {.x = 70, .y = -110, .z = 20, .a = 0, .l = 0}
 
     Private cols() As Color = {
@@ -163,19 +158,8 @@ Public Class Form1
     Color.FromArgb(110, 50, 0),
     Color.FromArgb(0, 60, 130)
     }
-    Private colsT() As Color = {
-    Color.FromArgb(127, 255, 255, 0),
-    Color.FromArgb(127, 160, 160, 0),
-    Color.FromArgb(127, 0, 255, 0),
-    Color.FromArgb(127, 0, 160, 0),
-    Color.FromArgb(127, 0, 255, 255),
-    Color.FromArgb(127, 0, 160, 160),
-    Color.FromArgb(127, 160, 100, 0),
-    Color.FromArgb(127, 110, 50, 0),
-    Color.FromArgb(0, 60, 130)
-    }
 
-    Private Frame As New DirectBitmap(SW, SH)
+    Dim frame As New DirectBitmap(SW, SH)
 
     Private Sub MovePlayer()
         If lookLeft Then
@@ -221,8 +205,6 @@ Public Class Form1
         x1 = Math.Clamp(x1, 0, SW - 1)
         x2 = Math.Clamp(x2, 0, SW - 1)
 
-        Dim gr = Graphics.FromImage(Frame.Bitmap)
-
         For x = x1 To x2
             Dim y1 As Integer = dyb * (x - xs + 0.5) / dx + b1
             Dim y2 As Integer = dyt * (x - xs + 0.5) / dx + t1
@@ -237,62 +219,20 @@ Public Class Form1
                 Sects(s).Surf(x) = y2
                 Continue For
             ElseIf Sects(s).surface = -1 Then
-                'gr.DrawLine(New Pen(cols(Sects(s).c1)), x, y1, x, Sects(s).Surf(x))
                 For y = Sects(s).Surf(x) To y1 - 1
-                    DrawPixel(x, y, Sects(s).c1)
+                    frame.SetPixel(x, y, cols(Sects(s).c1))
                 Next
             ElseIf Sects(s).surface = -2 Then
-                'gr.DrawLine(New Pen(cols(Sects(s).c2)), x, Sects(s).Surf(x), x, y2)
                 For y = y2 To Sects(s).Surf(x) - 1
-                    DrawPixel(x, y, Sects(s).c2)
+                    frame.SetPixel(x, y, cols(Sects(s).c2))
                 Next
             End If
-            'gr.DrawLine(New Pen(cols(c)), x, y1, x, y2)
             For y = y1 To y2 - 1
-                DrawPixel(x, y, c, x2 - x1, y2 - y1, New Point(x1, y1))
+                frame.SetPixel(x, y, cols(c))
             Next
         Next
 
     End Sub
-    Private Sub DrawWallT(x1 As Integer, x2 As Integer, b1 As Integer, b2 As Integer, t1 As Integer, t2 As Integer, c As Integer, s As Integer)
-        Dim x As Integer : Dim y As Integer
-
-        Dim dyb = b2 - b1
-        Dim dyt = t2 - t1
-        Dim dx = x2 - x1 : If dx = 0 Then dx = 1
-        Dim xs = x1
-
-        x1 = Math.Clamp(x1, 0, SW - 1)
-        x2 = Math.Clamp(x2, 0, SW - 1)
-
-        Dim gr = Graphics.FromImage(Frame.Bitmap)
-
-        For x = x1 To x2
-            Dim y1 As Integer = dyb * (x - xs + 0.5) / dx + b1
-            Dim y2 As Integer = dyt * (x - xs + 0.5) / dx + t1
-
-            y1 = Math.Clamp(y1, 0, SH)
-            y2 = Math.Clamp(y2, 0, SH)
-
-            If Sects(s).surface = 1 Then
-                Sects(s).Surf(x) = y1
-                Sects(s).Surf2(x) = y2
-            ElseIf Sects(s).surface = -1 Then
-                gr.DrawLine(New Pen(colsT(Sects(s).c1)), x, y1, x, Sects(s).Surf(x))
-                gr.DrawLine(New Pen(colsT(Sects(s).c2)), x, Sects(s).Surf2(x), x, y2)
-            End If
-            gr.DrawLine(New Pen(colsT(c)), x, y1, x, y2)
-        Next
-    End Sub
-    Public Function MakePolgon(p1 As Integer, p2 As Integer, p3 As Integer, p4 As Integer, p5 As Integer, p6 As Integer, p7 As Integer, p8 As Integer) As PointF()
-        Dim points() As PointF = {
-        New PointF(p1, p2),
-        New PointF(p3, p4),
-        New PointF(p5, p6),
-        New PointF(p7, p8)
-        }
-        Return points
-    End Function
 
     Private Sub clipBehindPlayer(ByRef x1 As Integer, ByRef y1 As Integer, ByRef z1 As Integer, x2 As Integer, y2 As Integer, z2 As Integer)
         Dim da As Single = y1
@@ -306,8 +246,11 @@ Public Class Form1
     End Sub
 
     Private Sub DrawFrame()
-        Dim startTime = Date.Now.Millisecond
+
+        Dim startTime = Date.Now.Ticks
+
         Frame.FillImage(cols(8))
+
         Dim wx(4) As Integer : Dim wy(4) As Integer : Dim wz(4) As Integer : Dim CS = M.cos(P.a) : Dim SN = M.sin(P.a)
 
         For s = 0 To numSect - 2
@@ -329,7 +272,6 @@ Public Class Form1
 
                 For w = Sects(s).ws To Sects(s).we - 1
 
-
                     Dim x1 = Walls(w).x1 - P.x : Dim y1 = Walls(w).y1 - P.y
                     Dim x2 = Walls(w).x2 - P.x : Dim y2 = Walls(w).y2 - P.y
 
@@ -364,7 +306,6 @@ Public Class Form1
                         clipBehindPlayer(wx(1), wy(1), wz(1), wx(0), wy(0), wz(0))
                         clipBehindPlayer(wx(3), wy(3), wz(3), wx(2), wy(2), wz(2))
                     End If
-
 
                     wx(0) = wx(0) * 400 / wy(0) + SW2 : wy(0) = wz(0) * 400 / wy(0) + SH2
                     wx(1) = wx(1) * 400 / wy(1) + SW2 : wy(1) = wz(1) * 400 / wy(1) + SH2
@@ -377,121 +318,39 @@ Public Class Form1
                 Sects(s).surface *= -1
             Next lop
         Next s
-        DrawToScreen(Frame)
-        Dim elapsedTime = Date.Now.Millisecond - startTime
-        Label1.Text = elapsedTime & "ms"
-        Label2.Text = CInt(1000 / If(Timer1.Interval < elapsedTime, elapsedTime, Timer1.Interval)) & "fps"
+        PictureBox1.Image = frame.Bitmap
+        elapsedTime = (Date.Now.Ticks - startTime) / TimeSpan.TicksPerMillisecond
+        Thread.Sleep(FrameTimeCap)
     End Sub
 
-    Private Sub DrawFrameT()
-        Dim startTime = Date.Now.Millisecond
-        Frame.FillImage(colsT(8))
-        Dim wx(4) As Integer : Dim wy(4) As Integer : Dim wz(4) As Integer : Dim CS = M.cos(P.a) : Dim SN = M.sin(P.a)
-
-        For s = 0 To numSect - 2
-            For w = 0 To numSect - s - 2
-                If Sects(w).d < Sects(w + 1).d Then
-                    Dim st As Sectors = Sects(w)
-                    Sects(w) = Sects(w + 1)
-                    Sects(w + 1) = st
-                End If
-            Next w
-        Next s
-        For s = 0 To numSect - 1
-            Sects(s).d = 0
-            Sects(s).surface = 1
-            For lop = 0 To 1
-
-                For w = Sects(s).ws To Sects(s).we - 1
-
-
-                    Dim x1 = Walls(w).x1 - P.x : Dim y1 = Walls(w).y1 - P.y
-                    Dim x2 = Walls(w).x2 - P.x : Dim y2 = Walls(w).y2 - P.y
-
-                    If lop = 0 Then
-                        Dim swp = x1 : x1 = x2 : x2 = swp : swp = y1 : y1 = y2 : y2 = swp
-                    End If
-
-                    wx(0) = x1 * CS - y1 * SN
-                    wx(1) = x2 * CS - y2 * SN
-                    wx(2) = wx(0)
-                    wx(3) = wx(1)
-
-                    wy(0) = y1 * CS + x1 * SN
-                    wy(1) = y2 * CS + x2 * SN
-                    wy(2) = wy(0)
-                    wy(3) = wy(1)
-                    Sects(s).d += dist(0, 0, (wx(0) + wx(1)) / 2, (wy(0) + wy(1)) / 2)
-
-                    wz(0) = Sects(s).z1 - P.z + (P.l * wy(0) / 32)
-                    wz(1) = Sects(s).z1 - P.z + (P.l * wy(1) / 32)
-                    wz(2) = wz(0) + Sects(s).z2
-                    wz(3) = wz(1) + Sects(s).z2
-
-                    If wy(0) < 1 AndAlso wy(1) < 1 Then Continue For
-
-                    If wy(0) < 1 Then
-                        clipBehindPlayer(wx(0), wy(0), wz(0), wx(1), wy(1), wz(1))
-                        clipBehindPlayer(wx(2), wy(2), wz(2), wx(3), wy(3), wz(3))
-                    End If
-
-                    If wy(1) < 1 Then
-                        clipBehindPlayer(wx(1), wy(1), wz(1), wx(0), wy(0), wz(0))
-                        clipBehindPlayer(wx(3), wy(3), wz(3), wx(2), wy(2), wz(2))
-                    End If
-
-
-                    wx(0) = wx(0) * 400 / wy(0) + SW2 : wy(0) = wz(0) * 400 / wy(0) + SH2
-                    wx(1) = wx(1) * 400 / wy(1) + SW2 : wy(1) = wz(1) * 400 / wy(1) + SH2
-                    wx(2) = wx(2) * 400 / wy(2) + SW2 : wy(2) = wz(2) * 400 / wy(2) + SH2
-                    wx(3) = wx(3) * 400 / wy(3) + SW2 : wy(3) = wz(3) * 400 / wy(3) + SH2
-
-                    DrawWallT(wx(0), wx(1), wy(0), wy(1), wy(2), wy(3), Walls(w).c, s)
-                Next w
-                Sects(s).d /= (Sects(s).we - Sects(s).ws)
-                Sects(s).surface *= -1
-            Next lop
-        Next s
-        DrawToScreen(Frame)
-        Dim elapsedTime = Date.Now.Millisecond - startTime
+    Private Sub UpdateInfo()
         Label1.Text = elapsedTime & "ms"
-        Label2.Text = CInt(1000 / If(Timer1.Interval < elapsedTime, elapsedTime, Timer1.Interval)) & "fps"
+        Label2.Text = CInt(1000 / If(FrameTimeCap < elapsedTime, elapsedTime, FrameTimeCap)) & "fps"
     End Sub
 
     Private Function dist(x1 As Integer, y1 As Integer, x2 As Integer, y2 As Integer) As Single
         Return Math.Sqrt((x1 - x2) ^ 2 + (y1 - y2) ^ 2)
     End Function
 
-    Public Sub DrawToScreen(bmp As DirectBitmap)
-        PictureBox1.Image = bmp.Resize(SW * pixelScale, SH * pixelScale, InterpolationMode.NearestNeighbor).Bitmap
-    End Sub
-
-    Private Sub DrawPixel(x As Integer, y As Integer, c As Integer, Optional width As Integer = 0, Optional height As Integer = 0, Optional origin As Point = Nothing)
-        Frame.SetPixel(x, y, cols(c))
-    End Sub
-
-    Private Sub Pro() Handles Timer1.Tick
-        MovePlayer()
-        If Translucent Then
-            DrawFrameT()
-        Else
-            DrawFrame()
-        End If
-    End Sub
-
     Private Sub Form1_Load(sender As Object, e As EventArgs) Handles MyBase.Load
+        Timer1.Interval = FrameTimeCap
         Label1.BackColor = cols(8)
         Label2.BackColor = cols(8)
         Label1.ForeColor = Color.White
         Label2.ForeColor = Color.White
-        Timer1.Interval = FrameTimeCap
         PictureBox1.Location = New Point(0, 0)
-        PictureBox1.Size = New Size(SW * pixelScale, SH * pixelScale)
+        PictureBox1.Size = New Size(SW, SH)
         PictureBox1.SendToBack()
         Location = New Point(0, 0)
         FormBorderStyle = FormBorderStyle.None
-        Height = SH * pixelScale : Width = SW * pixelScale
+        Height = SH : Width = SW
         Timer1.Start()
+    End Sub
+
+    Private Sub RenderLoop() Handles Timer1.Tick
+        MovePlayer()
+        DrawFrame()
+        UpdateInfo()
     End Sub
 
     Protected Overrides Sub OnKeyDown(e As KeyEventArgs)
@@ -515,45 +374,11 @@ Public Class Form1
             moveUp = True
         ElseIf e.KeyCode = Keys.ControlKey Then
             moveDown = True
-        ElseIf e.KeyCode = 18 Then ' Keys.Alt does not work, KeyCode 18 does
-            altHeld = True
-        ElseIf e.KeyCode = Keys.Return Then
-            enterHeld = True
-        End If
-        If altHeld AndAlso enterHeld Then
-            If FormBorderStyle = FormBorderStyle.None Then
-                FormBorderStyle = FormBorderStyle.FixedSingle
-                SW /= 2 : SH /= 2
-                Frame = New DirectBitmap(SW, SH)
-                Size = New Size(SW * pixelScale, SH * pixelScale)
-            Else
-                FormBorderStyle = FormBorderStyle.None
-                Location = New Point(0, 0)
-                SW = My.Computer.Screen.Bounds.Width
-                SH = My.Computer.Screen.Bounds.Height
-                Frame = New DirectBitmap(SW, SH)
-                Size = New Size(SW * pixelScale, SH * pixelScale)
-            End If
-            altHeld = False
-            enterHeld = False
         End If
         MovePlayer()
         MyBase.OnKeyDown(e)
     End Sub
-    Protected Overrides Sub OnKeyPress(e As KeyPressEventArgs)
-        If e.KeyChar = "-" Then
-            SW /= 2 : SH /= 2 : pixelScale *= 2
-            Frame = New DirectBitmap(SW, SH)
-        ElseIf e.KeyChar = "+" Then
-            If SW < My.Computer.Screen.Bounds.Width Then
-                SW *= 2 : SH *= 2 : pixelScale /= 2
-                Frame = New DirectBitmap(SW, SH)
-            End If
-        ElseIf e.KeyChar = "t" Then
-            Translucent = Not Translucent
-        End If
-        MyBase.OnKeyPress(e)
-    End Sub
+
     Protected Overrides Sub OnKeyUp(e As KeyEventArgs)
         If e.KeyCode = Keys.W Then
             moveForward = False
@@ -575,11 +400,8 @@ Public Class Form1
             moveUp = False
         ElseIf e.KeyCode = Keys.ControlKey Then
             moveDown = False
-        ElseIf e.KeyCode = Keys.Alt Then
-            altHeld = False
-        ElseIf e.KeyCode = Keys.Enter Then
-            enterHeld = False
         End If
         MyBase.OnKeyUp(e)
     End Sub
+
 End Class

@@ -23,17 +23,12 @@ Partial Class Form1
     <System.Diagnostics.DebuggerStepThrough()>
     Private Sub InitializeComponent()
         Me.components = New System.ComponentModel.Container()
-        Me.Timer1 = New System.Windows.Forms.Timer(Me.components)
         Me.Label1 = New System.Windows.Forms.Label()
-        Me.Timer2 = New System.Windows.Forms.Timer(Me.components)
         Me.PictureBox1 = New System.Windows.Forms.PictureBox()
         Me.Label2 = New System.Windows.Forms.Label()
+        Me.Timer1 = New System.Windows.Forms.Timer(Me.components)
         CType(Me.PictureBox1, System.ComponentModel.ISupportInitialize).BeginInit()
         Me.SuspendLayout()
-        '
-        'Timer1
-        '
-        Me.Timer1.Interval = 16
         '
         'Label1
         '
@@ -44,10 +39,6 @@ Partial Class Form1
         Me.Label1.Size = New System.Drawing.Size(41, 15)
         Me.Label1.TabIndex = 0
         Me.Label1.Text = "Label1"
-        '
-        'Timer2
-        '
-        Me.Timer2.Interval = 1000
         '
         'PictureBox1
         '
@@ -82,10 +73,8 @@ Partial Class Form1
         Me.PerformLayout()
 
     End Sub
-
-    Friend WithEvents Timer1 As Timer
     Friend WithEvents Label1 As Label
-    Friend WithEvents Timer2 As Timer
     Friend WithEvents PictureBox1 As PictureBox
     Friend WithEvents Label2 As Label
+    Friend WithEvents Timer1 As Timer
 End Class
