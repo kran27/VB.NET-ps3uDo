@@ -1,13 +1,18 @@
-﻿Imports System.Threading
+﻿Imports System.Drawing.Drawing2D
+Imports System.Threading
 Imports ImageTools.Tools
 
 Public Class Form1
-    Private Const FrameTimeCap = 10 ' how long before a new frame is drawn (in ms), 10ms is minimum
+    Private Const FrameTimeCap = 1 ' how long before a new frame is drawn (in ms)
 
-    Private elapsedTime As Integer = 0
+    Private elapsedTime As Double = 0
 
-    Private Shared SW As Integer = My.Computer.Screen.Bounds.Width
-    Private Shared SH As Integer = My.Computer.Screen.Bounds.Height
+    Private Const fov = 400.0F
+
+    Private Const sf As Integer = 2
+
+    Private Shared SW As Integer = My.Computer.Screen.Bounds.Width / sf
+    Private Shared SH As Integer = My.Computer.Screen.Bounds.Height / sf
 
     Private Property SW2 As Integer
         Get
@@ -25,8 +30,8 @@ Public Class Form1
         End Set
     End Property
 
-    Private Const numSect = 4
-    Private Const numWall = 16
+    Private numSect = 0
+    Private numWall = 0
 
     Private moveForward As Boolean = False
     Private moveBackward As Boolean = False
@@ -39,97 +44,76 @@ Public Class Form1
     Private lookLeft As Boolean = False
     Private lookRight As Boolean = False
 
-    Private loadSectors = {
-        0, 4, 0, 40, 2, 3,
-        4, 8, 0, 40, 4, 5,
-        8, 12, 0, 40, 6, 7,
-        12, 16, 0, 40, 0, 1
-    }
-
-    Private loadWalls = {
-    0, 0, 32, 0, 0,
-    32, 0, 32, 32, 1,
-    32, 32, 0, 32, 0,
-    0, 32, 0, 0, 1,
-    64, 0, 96, 0, 2,
-    96, 0, 96, 32, 3,
-    96, 32, 64, 32, 2,
-    64, 32, 64, 0, 3,
-    64, 64, 96, 64, 4,
-    96, 64, 96, 96, 5,
-    96, 96, 64, 96, 4,
-    64, 96, 64, 64, 5,
-    0, 64, 32, 64, 6,
-    32, 64, 32, 96, 7,
-    32, 96, 0, 96, 6,
-    0, 96, 0, 64, 7
-    }
-
     Private Class Wall
-        Public x1 As Integer
-        Public y1 As Integer
-        Public x2 As Integer
-        Public y2 As Integer
+        Public x1, y1 As Integer
+        Public x2, y2 As Integer
         Public c As Integer
+        Public wt, u, v As Integer
+        Public shade As Integer
     End Class
 
-    Private Walls() As Wall = NewWalls()
+    Private Walls As New List(Of Wall)
 
     Public Class Sectors
-        Public ws As Integer
-        Public we As Integer
-        Public z1 As Integer
-        Public z2 As Integer
+        Public ws, we As Integer
+        Public z1, z2 As Integer
         Public d As Integer
-        Public c1 As Integer
-        Public c2 As Integer
+        Public c1, c2 As Integer
+        Public st, ss As Integer
         Public Surf(SW) As Integer
-        Public Surf2(SW) As Integer
         Public surface As Integer
     End Class
 
-    Private Sects() As Sectors = NewSect()
+    Private Sects As New List(Of Sectors)
 
-    Public Function NewSect() As Sectors()
-        Dim arr() As Sectors = New Sectors(numSect - 1) {
-        New Sectors With {.ws = loadSectors(0), .we = loadSectors(1), .z1 = loadSectors(2), .z2 = loadSectors(3), .c1 = loadSectors(4), .c2 = loadSectors(5)},
-        New Sectors With {.ws = loadSectors(6), .we = loadSectors(7), .z1 = loadSectors(8), .z2 = loadSectors(9), .c1 = loadSectors(10), .c2 = loadSectors(11)},
-        New Sectors With {.ws = loadSectors(12), .we = loadSectors(13), .z1 = loadSectors(14), .z2 = loadSectors(15), .c1 = loadSectors(16), .c2 = loadSectors(17)},
-        New Sectors With {.ws = loadSectors(18), .we = loadSectors(19), .z1 = loadSectors(20), .z2 = loadSectors(21), .c1 = loadSectors(22), .c2 = loadSectors(23)}
-        }
-        Return arr
-    End Function
+    Sub LoadLevel()
 
-    Private Function NewWalls() As Wall()
-        Dim arr() As Wall = New Wall(numWall - 1) {
-            New Wall With {.x1 = loadWalls(0), .y1 = loadWalls(1), .x2 = loadWalls(2), .y2 = loadWalls(3), .c = loadWalls(4)},
-            New Wall With {.x1 = loadWalls(5), .y1 = loadWalls(6), .x2 = loadWalls(7), .y2 = loadWalls(8), .c = loadWalls(9)},
-            New Wall With {.x1 = loadWalls(10), .y1 = loadWalls(11), .x2 = loadWalls(12), .y2 = loadWalls(13), .c = loadWalls(14)},
-            New Wall With {.x1 = loadWalls(15), .y1 = loadWalls(16), .x2 = loadWalls(17), .y2 = loadWalls(18), .c = loadWalls(19)},
-            New Wall With {.x1 = loadWalls(20), .y1 = loadWalls(21), .x2 = loadWalls(22), .y2 = loadWalls(23), .c = loadWalls(24)},
-            New Wall With {.x1 = loadWalls(25), .y1 = loadWalls(26), .x2 = loadWalls(27), .y2 = loadWalls(28), .c = loadWalls(29)},
-            New Wall With {.x1 = loadWalls(30), .y1 = loadWalls(31), .x2 = loadWalls(32), .y2 = loadWalls(33), .c = loadWalls(34)},
-            New Wall With {.x1 = loadWalls(35), .y1 = loadWalls(36), .x2 = loadWalls(37), .y2 = loadWalls(38), .c = loadWalls(39)},
-            New Wall With {.x1 = loadWalls(40), .y1 = loadWalls(41), .x2 = loadWalls(42), .y2 = loadWalls(43), .c = loadWalls(44)},
-            New Wall With {.x1 = loadWalls(45), .y1 = loadWalls(46), .x2 = loadWalls(47), .y2 = loadWalls(48), .c = loadWalls(49)},
-            New Wall With {.x1 = loadWalls(50), .y1 = loadWalls(51), .x2 = loadWalls(52), .y2 = loadWalls(53), .c = loadWalls(54)},
-            New Wall With {.x1 = loadWalls(55), .y1 = loadWalls(56), .x2 = loadWalls(57), .y2 = loadWalls(58), .c = loadWalls(59)},
-            New Wall With {.x1 = loadWalls(60), .y1 = loadWalls(61), .x2 = loadWalls(62), .y2 = loadWalls(63), .c = loadWalls(64)},
-            New Wall With {.x1 = loadWalls(65), .y1 = loadWalls(66), .x2 = loadWalls(67), .y2 = loadWalls(68), .c = loadWalls(69)},
-            New Wall With {.x1 = loadWalls(70), .y1 = loadWalls(71), .x2 = loadWalls(72), .y2 = loadWalls(73), .c = loadWalls(74)},
-            New Wall With {.x1 = loadWalls(75), .y1 = loadWalls(76), .x2 = loadWalls(77), .y2 = loadWalls(78), .c = loadWalls(79)}
-        }
-        Return arr
-    End Function
+        Walls = New List(Of Wall)
+        Sects = New List(Of Sectors)
+
+        Dim level = IO.File.ReadAllLines("level.h")
+
+        numSect = level(0)
+        Dim tmp As String()
+        For s = 0 To numSect - 1
+            tmp = level(1 + s).Split(" ")
+            Sects.Add(New Sectors())
+            Sects(s).ws = tmp(0)
+            Sects(s).we = tmp(1)
+            Sects(s).z1 = tmp(2)
+            Sects(s).z2 = tmp(3)
+            Sects(s).st = tmp(4)
+            Sects(s).ss = tmp(5)
+        Next
+        numWall = level(1 + numSect)
+        For w = 0 To numWall - 1
+            tmp = level(2 + numSect + w).Split(" ")
+            Walls.Add(New Wall())
+            Walls(w).x1 = tmp(0)
+            Walls(w).y1 = tmp(1)
+            Walls(w).x2 = tmp(2)
+            Walls(w).y2 = tmp(3)
+            Walls(w).wt = tmp(4)
+            Walls(w).u = tmp(5)
+            Walls(w).v = tmp(6)
+            Walls(w).shade = tmp(7)
+        Next
+        tmp = level(3 + numSect + numWall).Split(" ")
+        P.x = tmp(0)
+        P.y = tmp(1)
+        P.z = tmp(2)
+        P.a = tmp(3)
+        P.l = tmp(4)
+    End Sub
 
     Private Class CosSin
-        Public cos(359) As Single
-        Public sin(359) As Single
+        Public cos(359) As Double
+        Public sin(359) As Double
 
         Public Sub New()
             For i = 0 To 359
-                cos(i) = CSng(Math.Cos(i * Math.PI / 180))
-                sin(i) = CSng(Math.Sin(i * Math.PI / 180))
+                cos(i) = Math.Cos(i * Math.PI / 180)
+                sin(i) = Math.Sin(i * Math.PI / 180)
             Next
         End Sub
 
@@ -159,7 +143,11 @@ Public Class Form1
     Color.FromArgb(0, 60, 130)
     }
 
+    Private texsheet As DirectBitmap = My.Resources.texsheet.ToDirectBitmap()
+    Private textures As New List(Of DirectBitmap)
+
     Dim frame As New DirectBitmap(SW, SH)
+    Dim scaledframe As New DirectBitmap(SW * sf, SH * sf)
 
     Private Sub MovePlayer()
         If lookLeft Then
@@ -194,42 +182,134 @@ Public Class Form1
         If moveUp Then P.z -= 4
     End Sub
 
-    Private Sub DrawWall(x1 As Integer, x2 As Integer, b1 As Integer, b2 As Integer, t1 As Integer, t2 As Integer, c As Integer, s As Integer)
+    Private Sub floors()
+        frame.FillImage(cols(8))
+        Dim x, y As Integer
+        Dim xo = SW2
+        Dim yo = SH2
+
+        Dim lookUpDown As Single = -P.l * 4
+        If lookUpDown > SH Then lookUpDown = SH
+        Dim moveUpDown As Single = P.z / 16
+        If moveUpDown = 0 Then moveUpDown = 0.0001
+        Dim ys = -yo, ye = -lookUpDown
+
+        If moveUpDown < 0 Then
+            ys = -lookUpDown
+            ye = yo + lookUpDown
+        End If
+
+        For y = ys To ye
+            For x = -xo To xo - 1
+                Dim z = y + lookUpDown
+                If z = 0 Then z = 0.0001
+                Dim fx As Integer = x / z * moveUpDown
+                Dim fy As Integer = fov / z * moveUpDown
+
+                Dim rx = fx * M.sin(P.a) - fy * M.cos(P.a) + (P.y / 30.0)
+                Dim ry = fx * M.cos(P.a) + fy * M.sin(P.a) - (P.x / 30.0)
+                If rx < 0 Then rx = -rx + 1
+                If ry < 0 Then ry = -ry + 1
+
+                If rx <= 0 Or ry <= 0 Or rx >= 5 Or ry >= 5 Then Continue For
+
+                If CInt(rx) Mod 2 = CInt(ry) Mod 2 Then : frame.SetPixel(x + xo, y + yo, Color.FromArgb(255, 0, 0))
+                Else : frame.SetPixel(x + xo, y + yo, Color.FromArgb(0, 255, 0))
+                End If
+            Next
+        Next
+
+        PictureBox1.Image = frame.Bitmap
+    End Sub
+
+    Private Sub DrawWall(x1 As Integer, x2 As Integer, b1 As Integer, b2 As Integer, t1 As Integer, t2 As Integer, s As Integer, w As Integer, frontBack As Integer)
         Dim x As Integer : Dim y As Integer
+
+        Dim wt = Walls(w).wt
+        Dim ht = 0F, ht_step = textures(wt).Width / (x2 - x1) * Walls(w).u
 
         Dim dyb = b2 - b1
         Dim dyt = t2 - t1
         Dim dx = x2 - x1 : If dx = 0 Then dx = 1
         Dim xs = x1
 
-        x1 = Math.Clamp(x1, 0, SW - 1)
-        x2 = Math.Clamp(x2, 0, SW - 1)
+        If x1 < 0 Then
+            ht -= ht_step * x1
+            x1 = 0
+        End If
+        If x2 < 0 Then x2 = 0
+        If x1 > SW Then x1 = SW
+        If x2 > SW Then x2 = SW
 
         For x = x1 To x2
             Dim y1 As Integer = dyb * (x - xs + 0.5) / dx + b1
             Dim y2 As Integer = dyt * (x - xs + 0.5) / dx + t1
 
-            y1 = Math.Clamp(y1, 0, SH)
-            y2 = Math.Clamp(y2, 0, SH)
+            Dim vt = 0F, vt_step = textures(wt).Height / (y2 - y1) * Walls(w).v
 
-            If Sects(s).surface = 1 Then
-                Sects(s).Surf(x) = y1
-                Continue For
-            ElseIf Sects(s).surface = 2 Then
-                Sects(s).Surf(x) = y2
-                Continue For
-            ElseIf Sects(s).surface = -1 Then
-                For y = Sects(s).Surf(x) To y1 - 1
-                    frame.SetPixel(x, y, cols(Sects(s).c1))
-                Next
-            ElseIf Sects(s).surface = -2 Then
-                For y = y2 To Sects(s).Surf(x) - 1
-                    frame.SetPixel(x, y, cols(Sects(s).c2))
-                Next
+            If y1 < 0 Then
+                vt -= vt_step * y1
+                y1 = 0
             End If
-            For y = y1 To y2 - 1
-                frame.SetPixel(x, y, cols(c))
-            Next
+            If y2 < 0 Then y2 = 0
+            If y1 > SH Then y1 = SH
+            If y2 > SH Then y2 = SH
+
+            If frontBack = 0 Then
+                If Sects(s).surface = 1 Then Sects(s).Surf(x) = y1
+                If Sects(s).surface = 2 Then Sects(s).Surf(x) = y2
+                For y = y1 To y2 - 1
+                    Dim pixel = textures(wt).GetPixel(Math.Clamp(ht Mod textures(wt).Width, 0, textures(w).Width - 1),
+                                                      Math.Clamp(vt Mod textures(wt).Height, 0, textures(w).Height - 1))
+                    Dim r = Math.Clamp(pixel.R - Walls(w).shade / 2, 0, 255)
+                    Dim g = Math.Clamp(pixel.G - Walls(w).shade / 2, 0, 255)
+                    Dim b = Math.Clamp(pixel.B - Walls(w).shade / 2, 0, 255)
+                    pixel = Color.FromArgb(r, g, b)
+                    frame.SetPixel(x, y, pixel)
+                    vt += vt_step
+                Next
+                ht += ht_step
+            ElseIf frontBack = 1 Then
+
+                Dim xo = SW2
+                Dim yo = SH2
+                Dim xt = x - xo
+                Dim wo As Integer
+                Dim tile = Sects(s).ss * 7
+
+                If Sects(s).surface = 1 Then
+                    y2 = Sects(s).Surf(x)
+                    wo = Sects(s).z1
+                End If
+                If Sects(s).surface = 2 Then
+                    y1 = Sects(s).Surf(x)
+                    wo = Sects(s).z2
+                End If
+
+                Dim lookUpDown As Single = -P.l * 6.2
+                If lookUpDown > SH Then lookUpDown = SH
+                Dim moveUpDown As Single = (P.z - wo) / 16
+                If moveUpDown = 0 Then moveUpDown = 0.0001
+                Dim ys = y1 - yo, ye = y2 - yo
+
+                For y = ys To ye
+                    Dim z = y + lookUpDown
+                    If z = 0 Then z = 0.0001
+                    Dim fx As Integer = xt / z * moveUpDown * tile
+                    Dim fy As Integer = fov / z * moveUpDown * tile
+
+                    Dim rx = fx * M.sin(P.a) - fy * M.cos(P.a) + (P.y / 60.0 * tile)
+                    Dim ry = fx * M.cos(P.a) + fy * M.sin(P.a) - (P.x / 60.0 * tile)
+                    If rx < 0 Then rx = -rx + 1
+                    If ry < 0 Then ry = -ry + 1
+
+                    Dim st = Sects(s).st
+                    Dim pixel = textures(st).GetPixel(Math.Clamp(rx Mod textures(st).Width, 0, textures(st).Width - 1),
+                                                      Math.Clamp(ry Mod textures(st).Height, 0, textures(st).Height - 1))
+                    frame.SetPixel(xt + xo, y + yo, pixel)
+                Next
+
+            End If
         Next
 
     End Sub
@@ -249,9 +329,14 @@ Public Class Form1
 
         Dim startTime = Date.Now.Ticks
 
-        Frame.FillImage(cols(8))
+        scaledframe.dispose()
+        frame.FillImage(cols(8))
 
-        Dim wx(4) As Integer : Dim wy(4) As Integer : Dim wz(4) As Integer : Dim CS = M.cos(P.a) : Dim SN = M.sin(P.a)
+        Dim wx(4), wy(4), wz(4) As Integer
+        Dim CS = M.cos(P.a)
+        Dim SN = M.sin(P.a)
+        Dim cycles As Integer
+        Dim x As Integer
 
         For s = 0 To numSect - 2
             For w = 0 To numSect - s - 2
@@ -262,20 +347,29 @@ Public Class Form1
                 End If
             Next w
         Next s
+
         For s = 0 To numSect - 1
             Sects(s).d = 0
 
-            If P.z < Sects(s).z1 Then : Sects(s).surface = 1
-            ElseIf P.z > Sects(s).z2 Then : Sects(s).surface = 2
-            Else : Sects(s).surface = 0 : End If
-            For lop = 0 To 1
+            If P.z < Sects(s).z1 Then
+                Sects(s).surface = 1 : cycles = 2
+                For i = 0 To SW - 1
+                    Sects(s).Surf(x) = SH
+                Next
+            ElseIf P.z > Sects(s).z2 Then
+                Sects(s).surface = 2 : cycles = 2
+                For i = 0 To SW - 1
+                    Sects(s).Surf(x) = 0
+                Next
+            Else : Sects(s).surface = 0 : cycles = 1 : End If
+            For lop = 0 To cycles - 1
 
                 For w = Sects(s).ws To Sects(s).we - 1
 
                     Dim x1 = Walls(w).x1 - P.x : Dim y1 = Walls(w).y1 - P.y
                     Dim x2 = Walls(w).x2 - P.x : Dim y2 = Walls(w).y2 - P.y
 
-                    If lop = 0 Then
+                    If lop = 1 Then
                         Dim swp = x1 : x1 = x2 : x2 = swp : swp = y1 : y1 = y2 : y2 = swp
                     End If
 
@@ -292,8 +386,8 @@ Public Class Form1
 
                     wz(0) = Sects(s).z1 - P.z + (P.l * wy(0) / 32)
                     wz(1) = Sects(s).z1 - P.z + (P.l * wy(1) / 32)
-                    wz(2) = wz(0) + Sects(s).z2
-                    wz(3) = wz(1) + Sects(s).z2
+                    wz(2) = Sects(s).z2 - P.z + (P.l * wy(0) / 32)
+                    wz(3) = Sects(s).z2 - P.z + (P.l * wy(1) / 32)
 
                     If wy(0) < 1 AndAlso wy(1) < 1 Then Continue For
 
@@ -307,23 +401,24 @@ Public Class Form1
                         clipBehindPlayer(wx(3), wy(3), wz(3), wx(2), wy(2), wz(2))
                     End If
 
-                    wx(0) = wx(0) * 400 / wy(0) + SW2 : wy(0) = wz(0) * 400 / wy(0) + SH2
-                    wx(1) = wx(1) * 400 / wy(1) + SW2 : wy(1) = wz(1) * 400 / wy(1) + SH2
-                    wx(2) = wx(2) * 400 / wy(2) + SW2 : wy(2) = wz(2) * 400 / wy(2) + SH2
-                    wx(3) = wx(3) * 400 / wy(3) + SW2 : wy(3) = wz(3) * 400 / wy(3) + SH2
+                    wx(0) = wx(0) * fov / wy(0) + SW2 : wy(0) = wz(0) * fov / wy(0) + SH2
+                    wx(1) = wx(1) * fov / wy(1) + SW2 : wy(1) = wz(1) * fov / wy(1) + SH2
+                    wx(2) = wx(2) * fov / wy(2) + SW2 : wy(2) = wz(2) * fov / wy(2) + SH2
+                    wx(3) = wx(3) * fov / wy(3) + SW2 : wy(3) = wz(3) * fov / wy(3) + SH2
 
-                    DrawWall(wx(0), wx(1), wy(0), wy(1), wy(2), wy(3), Walls(w).c, s)
+                    DrawWall(wx(0), wx(1), wy(0), wy(1), wy(2), wy(3), s, w, lop)
                 Next w
                 Sects(s).d /= (Sects(s).we - Sects(s).ws)
-                Sects(s).surface *= -1
             Next lop
         Next s
-        PictureBox1.Image = frame.Bitmap
+        scaledframe = frame.Resize(SW * sf, SH * sf, InterpolationMode.NearestNeighbor)
+
+        PictureBox1.Image = scaledframe.Bitmap
         elapsedTime = (Date.Now.Ticks - startTime) / TimeSpan.TicksPerMillisecond
         Thread.Sleep(FrameTimeCap)
     End Sub
 
-    Private Sub UpdateInfo()
+    Private Sub UpdateInfo() Handles Timer2.Tick
         Label1.Text = elapsedTime & "ms"
         Label2.Text = CInt(1000 / If(FrameTimeCap < elapsedTime, elapsedTime, FrameTimeCap)) & "fps"
     End Sub
@@ -333,24 +428,30 @@ Public Class Form1
     End Function
 
     Private Sub Form1_Load(sender As Object, e As EventArgs) Handles MyBase.Load
+        For i As Integer = 0 To (texsheet.Width / texsheet.Height) - 1
+            textures.Add(texsheet.Crop(texsheet.Height * i, 0, New Size(texsheet.Height, texsheet.Height)))
+        Next
+
         Timer1.Interval = FrameTimeCap
+        Timer2.Interval = 500
         Label1.BackColor = cols(8)
         Label2.BackColor = cols(8)
         Label1.ForeColor = Color.White
         Label2.ForeColor = Color.White
         PictureBox1.Location = New Point(0, 0)
-        PictureBox1.Size = New Size(SW, SH)
+        PictureBox1.Size = New Size(SW * sf, SH * sf)
         PictureBox1.SendToBack()
         Location = New Point(0, 0)
         FormBorderStyle = FormBorderStyle.None
-        Height = SH : Width = SW
+        Height = SH * sf : Width = SW * sf
+
         Timer1.Start()
+        Timer2.Start()
     End Sub
 
     Private Sub RenderLoop() Handles Timer1.Tick
         MovePlayer()
         DrawFrame()
-        UpdateInfo()
     End Sub
 
     Protected Overrides Sub OnKeyDown(e As KeyEventArgs)
@@ -374,6 +475,8 @@ Public Class Form1
             moveUp = True
         ElseIf e.KeyCode = Keys.ControlKey Then
             moveDown = True
+        ElseIf e.KeyCode = Keys.Return Then
+            LoadLevel()
         End If
         MovePlayer()
         MyBase.OnKeyDown(e)
