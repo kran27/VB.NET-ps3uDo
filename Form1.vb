@@ -7,9 +7,9 @@ Public Class Form1
 
     Private elapsedTime As Double = 0
 
-    Private Const fov = 400.0F
+    Private Const fov = 400.0F / sf
 
-    Private Const sf As Integer = 2
+    Private Const sf As Integer = 1  
 
     Private Shared SW As Integer = My.Computer.Screen.Bounds.Width / sf
     Private Shared SH As Integer = My.Computer.Screen.Bounds.Height / sf
